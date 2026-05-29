@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Setup NuGet
+      uses: nuget/setup-nuget@v2
+
+    - name: Restore Paket dependencies
+      shell: powershell
+      run: |
+        if (Test-Path ".\paket.exe") {
+          Unblock-File ".\paket.exe"
+          .\paket.exe restore
+        } else {
+          Write-Warning "paket.exe not found, skipping paket restore"
+        }
+
+    - name: Restore NuGet packages
+      run: nuget restore "Ploutus.D Unpacker.sln"
+
+    - name: Build Solution (x86)
+      shell: cmd
+      run: |
+        msbuild "Ploutus.D Unpacker.sln" /p:Configuration=Release /p:Platform="Any CPU" /p:PlatformTarget=x86 /p:Prefer32Bit=true /p:BuildInParallel=true
+
+    - name: List output files
+      shell: powershell
+      run: |
+        Get-ChildItem -Path . -Include *.exe,*.dll -Recurse | Where-Object { $_.FullName -like "*bin\Release*" -or $_.FullName -like "*Result*" } | Select-Object FullName
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: PloutusD-Unpacker-x86
+        path: |
+          **/bin/Release/*.exe
+          **/bin/Release/*.dll
+          **/bin/Release/*.exe.config
+          **/Result/*.exe
+          **/Result/*.dll
+          **/Result/*.exe.config
